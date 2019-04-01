@@ -188,4 +188,115 @@ namespace MD5
         }
 	}
 
+	public class WorkerPipelined
+	{
+		public Block input_block;
+		public Hashes input_hash;
+
+		public Hashes output_hash;
+
+		WorkerPipelinedStage[] workers;
+
+		public WorkerPipelined(Block input_block, Hashes input_hash)
+		{
+			this.input_block = input_block;
+			this.input_hash = input_hash;
+			
+			workers = new WorkerPipelinedStage[64];
+			for (int i = 0; i < 64; i++)
+			{
+				workers[i] = new WorkerPipelinedStage((uint) i);
+				if (i > 0)
+				{
+					workers[i].input_block = workers[i-1].output_block;
+					workers[i].input_hash  = workers[i-1].output_hash;
+				}
+			}
+			workers[0].input_block = input_block;
+			workers[0].input_hash  = input_hash;
+			output_hash = workers[63].output_hash;
+		}
+	}
+
+	[ClockedProcess]
+	public class WorkerPipelinedStage : SimpleProcess
+	{
+		[InputBus]
+		public Block input_block;
+		[InputBus]
+		public Hashes input_hash;
+
+		[OutputBus]
+		public Block output_block = Scope.CreateBus<Block>();
+		[OutputBus]
+		public Hashes output_hash = Scope.CreateBus<Hashes>();
+
+		public WorkerPipelinedStage(uint i)
+		{
+			this.i  = i;
+			r  = Constants.r[i];
+			kk = Constants.kk[i];
+			g  = Constants.gs[i];
+			first = i == 0;
+			last  = i == 64;
+		}
+
+		uint r, kk, g, i;
+		bool first, last;
+
+		uint h0 = 0x67452301;
+        uint h1 = 0xefcdab89;
+        uint h2 = 0x98badcfe;
+        uint h3 = 0x10325476;
+
+		uint a, b, c, d;
+
+		protected override void OnTick()
+		{
+			if (input_block.valid)
+			{
+				uint f;
+				if (i < 16)
+					f = (input_hash.h1 & input_hash.h2) | ((~input_hash.h1) & input_hash.h3);
+				else if (i < 32)
+					f = (input_hash.h3 & input_hash.h1) | ((~input_hash.h3) & input_hash.h2);
+				else if (i < 48)
+					f = input_hash.h1 ^ input_hash.h2 ^ input_hash.h3;
+				else
+					f = input_hash.h2 ^ (input_hash.h1 | (~input_hash.h3));
+
+				d = input_hash.h2;
+				c = input_hash.h1;
+				uint x = input_hash.h0 + f + kk + input_block.w[(int)g];
+				int c2 = (int)r;
+				b = input_hash.h1 + (((x) << (c2)) | ((x) >> (32 - (c2))));
+				a = input_hash.h3;
+
+				output_hash.valid = true;
+				if (last)
+				{
+					output_hash.h0 = h0 + a;
+					output_hash.h1 = h1 + b;
+					output_hash.h2 = h2 + c;
+					output_hash.h3 = h3 + d;
+				}
+				else
+				{
+					output_hash.h0 = a;
+					output_hash.h1 = b;
+					output_hash.h2 = c;
+					output_hash.h3 = d;
+				}
+				output_block.valid = true;
+				for (int j = 0; j < input_block.w.Length; j++)
+					output_block.w[j] = input_block.w[j];
+			}
+			else
+			{
+				output_hash.valid = false;
+				output_block.valid = false;
+			}
+		}
+	}
+
 }

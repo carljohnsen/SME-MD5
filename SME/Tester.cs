@@ -15,6 +15,11 @@ namespace MD5
 		[OutputBus]
 		public Hashes initial_hash = Scope.CreateBus<Hashes>();
 
+		public Tester(int rounds)
+		{
+			this.rounds = rounds;
+		}
+
 		uint[] build_block(uint[] input)
 		{
 			uint[] tmp = new uint[16];
@@ -50,13 +55,14 @@ namespace MD5
 		}
 
 		Random rnd = new Random();
+		int rounds;
 
 		public async override System.Threading.Tasks.Task Run()
 		{
 			System.Security.Cryptography.MD5 hasher = System.Security.Cryptography.MD5.Create();
 			await ClockAsync();
 
-			for (int i = 0; i < 100; i++)
+			for (int i = 0; i < rounds; i++)
 			{
 				uint[] tmp = build_input(rnd.Next(14));
 				uint[] blk = build_block(tmp);
@@ -73,6 +79,7 @@ namespace MD5
 				byte[] tmp_byte = from_uint(tmp);
 				byte[] verified_output = hasher.ComputeHash(tmp_byte);
 				byte[] computed_output = from_uint(new uint[]{computed.h0, computed.h1, computed.h2, computed.h3});
+				for (int k = 0; k < 5; k++)
 				if (!Enumerable.SequenceEqual(verified_output, computed_output))
 				{
 					Console.WriteLine("They don't match!");

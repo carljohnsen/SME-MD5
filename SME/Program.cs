@@ -9,19 +9,18 @@ namespace MD5
         {
             using (new Simulation())
             {
-                var tester = new Tester();
-                var worker = new WorkerMulticycle();
+                var tester = new Tester(1);
+                var worker = new WorkerPipelined(tester.block, tester.initial_hash);
+                
+                tester.computed = worker.output_hash;
+                
 
-                tester.computed = worker.output;
-                worker.block = tester.block;
-                worker.input_hash = tester.initial_hash;
-
-                Simulation.Current.AddTopLevelInputs(worker.block, worker.input_hash);
-                Simulation.Current.AddTopLevelOutputs(worker.output);
+                Simulation.Current.AddTopLevelInputs(worker.input_block, worker.input_hash);
+                Simulation.Current.AddTopLevelOutputs(worker.output_hash);
 
                 Simulation.Current
-                    .BuildCSVFile()
-                    .BuildVHDL()
+                    //.BuildCSVFile()
+                    //.BuildVHDL()
                     .Run();
             }
         }
