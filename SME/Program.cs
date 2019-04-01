@@ -10,7 +10,7 @@ namespace MD5
             using (new Simulation())
             {
                 var tester = new Tester();
-                var worker = new Worker();
+                var worker = new WorkerMulticycle();
 
                 tester.computed = worker.output;
                 worker.block = tester.block;
