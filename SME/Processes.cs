@@ -18,9 +18,9 @@ namespace MD5
 		
 		public WorkerMulticycle(Block input_block, Hashes input_hash)
 		{
-			r  = new uint[Constants.r.Length];
+			r  = new  int[Constants.r.Length];
 			kk = new uint[Constants.kk.Length];
-			gs = new uint[Constants.gs.Length];
+			gs = new  int[Constants.gs.Length];
 
 			Array.Copy(Constants.r,  r,  r.Length);
 			Array.Copy(Constants.kk, kk, kk.Length);
@@ -30,20 +30,15 @@ namespace MD5
 			this.input_hash  = input_hash;
 		}
 
-		uint[] r;
+		int[] r, gs;
 		uint[] kk;
-		uint[] gs;
 
 		uint h0 = 0x67452301;
         uint h1 = 0xefcdab89;
         uint h2 = 0x98badcfe;
         uint h3 = 0x10325476;
 
-		uint a;
-		uint b;
-		uint c;
-		uint d;
-
+		uint a, b, c, d;
 		int i;
 
 		bool running = false;
@@ -61,10 +56,6 @@ namespace MD5
 					c = input_hash.h2;
 					d = input_hash.h3;
 					output_hash.valid = false;
-					output_hash.h0 = 0;
-					output_hash.h1 = 0;
-					output_hash.h2 = 0;
-					output_hash.h3 = 0;
 				}
 			}
 			else
@@ -82,9 +73,8 @@ namespace MD5
 				uint tmp = d;
 				d = c;
 				c = b;
-				uint x = a + f + kk[i] + input_block.w[(int)gs[i]];
-				int c2 = (int)r[i];
-				b = b + (((x) << (c2)) | ((x) >> (32 - (c2))));
+				uint x = a + f + kk[i] + input_block.w[gs[i]];
+				b = b + ((x << r[i]) | (x >> (32 - r[i])));
 				a = tmp;
 
 				if (i == 63)
@@ -114,9 +104,9 @@ namespace MD5
 
 		public WorkerSinglecycle(Block input_block, Hashes input_hash)
         {
-			r  = new uint[Constants.r.Length];
+			r  = new  int[Constants.r.Length];
 			kk = new uint[Constants.kk.Length];
-			gs = new uint[Constants.gs.Length];
+			gs = new  int[Constants.gs.Length];
 
 			Array.Copy(Constants.r,  r,  r.Length);
 			Array.Copy(Constants.kk, kk, kk.Length);
@@ -126,25 +116,22 @@ namespace MD5
 			this.input_hash  = input_hash;
 		}
 
-		uint[] r;
+		int[] r, gs;
 		uint[] kk;
-		uint[] gs;
 
-        uint h0, h1, h2, h3;
+		uint h0 = 0x67452301;
+        uint h1 = 0xefcdab89;
+        uint h2 = 0x98badcfe;
+        uint h3 = 0x10325476;
 
         protected override void OnTick()
         {
 			if (input_block.valid)
 			{
-				h0 = input_hash.h0;
-				h1 = input_hash.h1;
-				h2 = input_hash.h2;
-				h3 = input_hash.h3;
-
-				uint a = h0;
-				uint b = h1;
-				uint c = h2;
-				uint d = h3;
+				uint a = input_hash.h0;
+				uint b = input_hash.h1;
+				uint c = input_hash.h2;
+				uint d = input_hash.h3;
 
 				for (int i = 0; i < 64; i++)
 				{
@@ -161,9 +148,8 @@ namespace MD5
 					uint tmp = d;
 					d = c;
 					c = b;
-					uint x = a + f + kk[i] + input_block.w[(int)gs[i]];
-					int c2 = (int)r[i];
-					b = b + (((x) << (c2)) | ((x) >> (32 - (c2))));
+					uint x = a + f + kk[i] + input_block.w[gs[i]];
+					b = b + ((x << r[i]) | (x >> (32 - r[i])));
 					a = tmp;
 				}
 
@@ -174,13 +160,7 @@ namespace MD5
 				output_hash.h3 = h3 + d;
 			}
 			else
-			{
 				output_hash.valid = false;
-				output_hash.h0 = 0;
-				output_hash.h1 = 0;
-				output_hash.h2 = 0;
-				output_hash.h3 = 0;
-			}
         }
 	}
 
@@ -237,7 +217,8 @@ namespace MD5
 			last  = i == 63;
 		}
 
-		uint r, kk, g, i;
+		int r, g;
+		uint kk, i;
 		bool first, last;
 
 		uint h0 = 0x67452301;
@@ -263,26 +244,15 @@ namespace MD5
 
 				d = input_hash.h2;
 				c = input_hash.h1;
-				uint x = input_hash.h0 + f + kk + input_block.w[(int)g];
-				int c2 = (int)r;
-				b = input_hash.h1 + (((x) << (c2)) | ((x) >> (32 - (c2))));
+				uint x = input_hash.h0 + f + kk + input_block.w[g];
+				b = input_hash.h1 + ((x << r) | (x >> (32 - r)));
 				a = input_hash.h3;
 
 				output_hash.valid = true;
-				if (last)
-				{
-					output_hash.h0 = h0 + a;
-					output_hash.h1 = h1 + b;
-					output_hash.h2 = h2 + c;
-					output_hash.h3 = h3 + d;
-				}
-				else
-				{
-					output_hash.h0 = a;
-					output_hash.h1 = b;
-					output_hash.h2 = c;
-					output_hash.h3 = d;
-				}
+				output_hash.h0 = last ? h0 + a : a;
+				output_hash.h1 = last ? h1 + b : b;
+				output_hash.h2 = last ? h2 + c : c;
+				output_hash.h3 = last ? h3 + d : d;
 				output_block.valid = true;
 				for (int j = 0; j < input_block.w.Length; j++)
 					output_block.w[j] = input_block.w[j];
