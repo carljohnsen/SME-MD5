@@ -1,55 +1,40 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <sys/time.h>
+#include <openssl/md5.h>
 
-#define CORES 8
-#define SEARCH_SPACE 0xFFFFFFFF00000000
-#define STEP_SIZE SEARCH_SPACE / CORES
+typedef struct {
+    char data[512];
+} block;
 
-int core(char *input, unsigned int *targets);
-long generator(int index, int *valid, char *result, unsigned int *targets);
-void top_level(unsigned int hashes[4], char output[8]);
-int verifier(unsigned int *hashes, unsigned int *targets);
+typedef struct {
+    unsigned int h[4];
+} hashes;
+
+hashes core(block input);
+void tester(int rounds);
+
 
 int main(int argc, char **argv) {
-    int solvers = 1, valid = 0;
-    unsigned int targets[] = {
-        //0x8f4b1921, 0x98537d1a, 0x3cf99610, 0x2a427486 // 'AAA     '
-        0x98a4586f, 0x7f2feac3, 0xe26eaa22, 0x323d3552 // 'AAAA    '
-    };
-    char result[8];
-    switch (argc) {
-        case 5: targets[0] = (unsigned int) strtol(argv[1], NULL, 0);
-                targets[1] = (unsigned int) strtol(argv[2], NULL, 0);
-                targets[2] = (unsigned int) strtol(argv[3], NULL, 0);
-                targets[3] = (unsigned int) strtol(argv[4], NULL, 0);
-        case 1: break;
-        default: printf("Usage: %s [targets: {h0, h1, h2, h3}]", argv[0]);
-    }
     struct timeval start, end;
     unsigned long guesses = 0;
     int c;
     gettimeofday(&start, NULL);
-#pragma omp parallel for private(c) shared(valid) schedule(dynamic) reduction(+:guesses)
-    for (c = 0; c < CORES; c++) {
-        guesses += generator(c, &valid, result, targets);
-    }
+    tester(1000000);
     gettimeofday(&end, NULL);
     unsigned long sec = end.tv_sec - start.tv_sec;
     unsigned long msec = (end.tv_usec - start.tv_usec) / 1000;
     unsigned long total_msec = sec * 1000 + msec;
-    unsigned long guesses_msec = guesses / total_msec;
-    double hashrate = (0.0 + guesses_msec) / 1000;
-    printf("--'%s'--\n", result);
-    printf("%luM guesses in %u sec %u ms = %.02f MHash\n", guesses/1000000, sec, msec, hashrate);
 }
 
-int core(char *input, unsigned int *targets) {
+hashes core(block input) {
     unsigned int r[] = {
         7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
         5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20,
         4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
         6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21};
+
     unsigned int k[] = {
         0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
         0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
@@ -67,18 +52,20 @@ int core(char *input, unsigned int *targets) {
         0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
         0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
         0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391};
+
     unsigned int h0 = 0x67452301;
     unsigned int h1 = 0xefcdab89;
     unsigned int h2 = 0x98badcfe;
     unsigned int h3 = 0x10325476;
-    unsigned int *w = (unsigned int *) input;
+
     unsigned int a = h0;
     unsigned int b = h1;
     unsigned int c = h2;
     unsigned int d = h3;
 
+    unsigned int *w = (unsigned int *) input.data;
+
     for (int i = 0; i < 64; i++) {
-#pragma HLS PIPELINE
         unsigned int f, g;
         if (i < 16) {
             f = (b & c) | ((~b) & d);
@@ -97,64 +84,60 @@ int core(char *input, unsigned int *targets) {
         d = c;
         c = b;
         unsigned int x = a + f + k[i] + w[g];
-        int c2 = (int) r[i];
-        b = b + (((x) << (c2)) | ((x) >> (32 - (c2))));
+        b = b + ((x << r[i]) | (x >> (32 - r[i])));
         a = temp;
     }
 
-    unsigned int hashes[4];
-    hashes[0] = h0 + a;
-    hashes[1] = h1 + b;
-    hashes[2] = h2 + c;
-    hashes[3] = h3 + d;
-    return verifier(hashes, targets);
+    hashes result;
+    result.h[0] = h0 + a;
+    result.h[1] = h1 + b;
+    result.h[2] = h2 + c;
+    result.h[3] = h3 + d;
+    return result;
 }
 
-long generator(int index, int *valid, char *result, unsigned int *targets) {
-    unsigned long steps = 0;
-    char input[64];
-    int i;
-    for (i = 0; i < 64; i++) input[i] = 0;
-    unsigned long remainder = STEP_SIZE * index;
-    unsigned int base = 127-32;
-    for (i = 0; i < 8; i++) {
-        input[i] = (remainder % base) + 32;
-        remainder = remainder / base;
-    }
-    input[8] = 128;
-    input[56] = 64;
-    while (1) {
-        if (*(valid) == 1) break;
-        steps++;
-        if (core(input, targets)) {
-            *(valid) = 1;
-            for (int i = 0; i < 8; i++) {
-                result[i] = input[i];
-            }
-            break;
-        } else {
-            for (int i = 0; i < 8; i++) {
-                input[i] = (input[i] + 1) % 127;
-                if (input[i] == 0) {
-                    input[i] = 32;
-                } else {
-                    break;
-                }
-            }
+void tester(int rounds) {
+    srand(time(NULL));
+    for (int i = 0; i < rounds; i++) {
+        // Generate the data
+        int words = rand() % 13;
+        int tmp[16];
+        for (int j = 0; j < words; j++)
+            tmp[j] = rand();
+        tmp[words] = 128;
+        for (int j = words+1; j < 15; j++)
+            tmp[j] = 0;
+        tmp[14] = words * 4 * 8;
+        tmp[15] = 0;
+        
+        // Fill the block
+        block blk;
+        for (int j = 0; j < 16; j++)
+            ((int *)blk.data)[j] = tmp[j];
+
+        // Compute the resulting hash
+        hashes computed = core(blk);
+
+        // Compute the library hash for verification
+        unsigned char digest[16];
+        MD5((unsigned char *)&blk.data, words*4, digest);
+
+        // Compare the outputs
+        int eq = 1;
+        for (int j = 0; j < 16; j++)
+            eq = eq && digest[j] == ((unsigned char *)computed.h)[j];
+
+        // Report error, if any
+        if (!eq) {
+            // Print the digests
+            printf("Not equal\n");
+            for (int j = 0; j < 4; j++)
+                printf("%08X ", ((int*)digest)[j]);
+            printf(" - verified\n");
+            for (int j = 0; j < 4; j++)
+                printf("%08X ", computed.h[j]);
+            printf(" - computed\n");
         }
     }
-    return steps;
-}
-
-void top_level(unsigned int hashes[4], char output[8]) {
-	int valid = 0;
-	generator(0, &valid, output, hashes);
-
-}
-
-int verifier(unsigned int *hashes, unsigned int *targets) {
-    return hashes[0] == targets[0] &&
-        hashes[1] == targets[1] &&
-        hashes[2] == targets[2] &&
-        hashes[3] == targets[3];
+    printf("Test done\n");
 }
