@@ -54,6 +54,10 @@ namespace MD5
 			return tmp;
 		}
 
+		uint h0 = 0x67452301;
+        uint h1 = 0xefcdab89;
+        uint h2 = 0x98badcfe;
+        uint h3 = 0x10325476;
 		Random rnd = new Random();
 		int rounds;
 
@@ -69,17 +73,22 @@ namespace MD5
 				for (int j = 0; j < blk.Length; j++)
 					block.w[j] = blk[j];
 				block.valid = true;
-				initial_hash.valid = false;
+				initial_hash.valid = true;
+				initial_hash.h0 = h0;
+				initial_hash.h1 = h1;
+				initial_hash.h2 = h2;
+				initial_hash.h3 = h3;
 				await ClockAsync();
 				await ClockAsync();
 				block.valid = false;
 				while (!computed.valid)
+				{
 					await ClockAsync();
+				}
 
 				byte[] tmp_byte = from_uint(tmp);
 				byte[] verified_output = hasher.ComputeHash(tmp_byte);
 				byte[] computed_output = from_uint(new uint[]{computed.h0, computed.h1, computed.h2, computed.h3});
-				for (int k = 0; k < 5; k++)
 				if (!Enumerable.SequenceEqual(verified_output, computed_output))
 				{
 					Console.WriteLine("They don't match!");

@@ -9,12 +9,12 @@ namespace MD5
 	public class WorkerMulticycle : SimpleProcess
 	{
 		[InputBus]
-        public Block block;
+        public Block input_block;
 		[InputBus]
 		public Hashes input_hash;
 
         [OutputBus]
-        public Hashes output = Scope.CreateBus<Hashes>();
+        public Hashes output_hash = Scope.CreateBus<Hashes>();
 		
 		public WorkerMulticycle()
 		{
@@ -49,19 +49,19 @@ namespace MD5
 		{
 			if (!running)
 			{
-				if (block.valid)
+				if (input_block.valid)
 				{
 					running = true;
 					i = 0;
-					a = h0;
-					b = h1;
-					c = h2;
-					d = h3;
-					output.valid = false;
-					output.h0 = 0;
-					output.h1 = 0;
-					output.h2 = 0;
-					output.h3 = 0;
+					a = input_hash.h0;
+					b = input_hash.h1;
+					c = input_hash.h2;
+					d = input_hash.h3;
+					output_hash.valid = false;
+					output_hash.h0 = 0;
+					output_hash.h1 = 0;
+					output_hash.h2 = 0;
+					output_hash.h3 = 0;
 				}
 			}
 			else
@@ -79,18 +79,18 @@ namespace MD5
 				uint tmp = d;
 				d = c;
 				c = b;
-				uint x = a + f + kk[i] + block.w[(int)gs[i]];
+				uint x = a + f + kk[i] + input_block.w[(int)gs[i]];
 				int c2 = (int)r[i];
 				b = b + (((x) << (c2)) | ((x) >> (32 - (c2))));
 				a = tmp;
 
 				if (i == 63)
 				{
-					output.valid = true;
-					output.h0 = h0 + a;
-					output.h1 = h1 + b;
-					output.h2 = h2 + c;
-					output.h3 = h3 + d;
+					output_hash.valid = true;
+					output_hash.h0 = h0 + a;
+					output_hash.h1 = h1 + b;
+					output_hash.h2 = h2 + c;
+					output_hash.h3 = h3 + d;
 					running = false;
 				}
 				i++;
@@ -102,12 +102,12 @@ namespace MD5
     public class WorkerSinglecycle : SimpleProcess
     {
         [InputBus]
-        public Block block;
+        public Block input_block;
 		[InputBus]
 		public Hashes input_hash;
 
         [OutputBus]
-        public Hashes output = Scope.CreateBus<Hashes>();
+        public Hashes output_hash = Scope.CreateBus<Hashes>();
 
 		public WorkerSinglecycle()
         {
@@ -128,22 +128,12 @@ namespace MD5
 
         protected override void OnTick()
         {
-			if (block.valid)
+			if (input_block.valid)
 			{
-				if (input_hash.valid)
-				{
-					h0 = input_hash.h0;
-					h1 = input_hash.h1;
-					h2 = input_hash.h2;
-					h3 = input_hash.h3;
-				}
-				else
-				{
-					h0 = 0x67452301;
-					h1 = 0xefcdab89;
-					h2 = 0x98badcfe;
-					h3 = 0x10325476;
-				}
+				h0 = input_hash.h0;
+				h1 = input_hash.h1;
+				h2 = input_hash.h2;
+				h3 = input_hash.h3;
 
 				uint a = h0;
 				uint b = h1;
@@ -165,25 +155,25 @@ namespace MD5
 					uint tmp = d;
 					d = c;
 					c = b;
-					uint x = a + f + kk[i] + block.w[(int)gs[i]];
+					uint x = a + f + kk[i] + input_block.w[(int)gs[i]];
 					int c2 = (int)r[i];
 					b = b + (((x) << (c2)) | ((x) >> (32 - (c2))));
 					a = tmp;
 				}
 
-				output.valid = true;
-				output.h0 = h0 + a;
-				output.h1 = h1 + b;
-				output.h2 = h2 + c;
-				output.h3 = h3 + d;
+				output_hash.valid = true;
+				output_hash.h0 = h0 + a;
+				output_hash.h1 = h1 + b;
+				output_hash.h2 = h2 + c;
+				output_hash.h3 = h3 + d;
 			}
 			else
 			{
-				output.valid = false;
-				output.h0 = 0;
-				output.h1 = 0;
-				output.h2 = 0;
-				output.h3 = 0;
+				output_hash.valid = false;
+				output_hash.h0 = 0;
+				output_hash.h1 = 0;
+				output_hash.h2 = 0;
+				output_hash.h3 = 0;
 			}
         }
 	}
@@ -201,7 +191,7 @@ namespace MD5
 		{
 			this.input_block = input_block;
 			this.input_hash = input_hash;
-			
+
 			workers = new WorkerPipelinedStage[64];
 			for (int i = 0; i < 64; i++)
 			{
@@ -238,7 +228,7 @@ namespace MD5
 			kk = Constants.kk[i];
 			g  = Constants.gs[i];
 			first = i == 0;
-			last  = i == 64;
+			last  = i == 63;
 		}
 
 		uint r, kk, g, i;
