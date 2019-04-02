@@ -16,7 +16,7 @@ namespace MD5
         [OutputBus]
         public Hashes output_hash = Scope.CreateBus<Hashes>();
 		
-		public WorkerMulticycle()
+		public WorkerMulticycle(Block input_block, Hashes input_hash)
 		{
 			r  = new uint[Constants.r.Length];
 			kk = new uint[Constants.kk.Length];
@@ -25,6 +25,9 @@ namespace MD5
 			Array.Copy(Constants.r,  r,  r.Length);
 			Array.Copy(Constants.kk, kk, kk.Length);
 			Array.Copy(Constants.gs, gs, gs.Length);
+
+			this.input_block = input_block;
+			this.input_hash  = input_hash;
 		}
 
 		uint[] r;
@@ -109,7 +112,7 @@ namespace MD5
         [OutputBus]
         public Hashes output_hash = Scope.CreateBus<Hashes>();
 
-		public WorkerSinglecycle()
+		public WorkerSinglecycle(Block input_block, Hashes input_hash)
         {
 			r  = new uint[Constants.r.Length];
 			kk = new uint[Constants.kk.Length];
@@ -118,6 +121,9 @@ namespace MD5
 			Array.Copy(Constants.r,  r,  r.Length);
 			Array.Copy(Constants.kk, kk, kk.Length);
 			Array.Copy(Constants.gs, gs, gs.Length);
+
+			this.input_block = input_block;
+			this.input_hash  = input_hash;
 		}
 
 		uint[] r;
