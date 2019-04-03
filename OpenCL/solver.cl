@@ -1,88 +1,72 @@
 #include "solver.h"
 
-__kernel void md5_const(__global uint* output, __constant uint* r, __constant uint*kk,
-                           __constant uint* targets, __constant ulong* steps) {
-    __private char input[64];
-    __private uint *w;
-    __private uint h0, h1, h2, h3, a, b, c, d, f, g, tmp, x;
-    __private int c2;
+__constant uint r[64] = {
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20, 5,  9, 14, 20,
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21};
 
-    uint loc_addr = get_local_id(0);
-    uint global_addr = get_global_id(0);
+__constant uint k[64] = {
+    0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
+    0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
+    0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+    0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821,
+    0xf61e2562, 0xc040b340, 0x265e5a51, 0xe9b6c7aa,
+    0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+    0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed,
+    0xa9e3e905, 0xfcefa3f8, 0x676f02d9, 0x8d2a4c8a,
+    0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+    0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70,
+    0x289b7ec6, 0xeaa127fa, 0xd4ef3085, 0x04881d05,
+    0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+    0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039,
+    0x655b59c3, 0x8f0ccc92, 0xffeff47d, 0x85845dd1,
+    0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+    0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391};
 
-    ulong offset = GENERATOR_STEP_SIZE * global_addr;
-    ulong remainder = offset + steps[0];
-    uint base = 127-32;
-    for (int i = 0; i < 8; i++) {
-        input[i] = (remainder % base) + 32;
-        remainder = remainder / base;
-    }
+__kernel void md5(__global block *input, __global hashes *result) {
+    if (get_global_id(0) != 0)
+        return;
 
-    input[8] = 128;
-    input[56] = 64;
-    w = (uint*) input;
+    uint h0 = 0x67452301;
+    uint h1 = 0xefcdab89;
+    uint h2 = 0x98badcfe;
+    uint h3 = 0x10325476;
+    
+    uint a = h0;
+    uint b = h1;
+    uint c = h2;
+    uint d = h3;
 
-    for (int j = 0; j < KERNEL_ITERATIONS; j++) {
-        h0 = 0x67452301;
-        h1 = 0xefcdab89;
-        h2 = 0x98badcfe;
-        h3 = 0x10325476;
+    // Reason for __global in cast: https://stackoverflow.com/questions/10483445/how-to-type-cast-char-to-int-in-opencl
+    __global uint *w = (__global uint*) input->data;
 
-        a = h0;
-        b = h1;
-        c = h2;
-        d = h3;
-
-        for (int i = 0; i < 64; i++) {
-            if (i < 16) {
-                f = (b & c) | ((~b) & d);
-                g = (uint)i;
-            } else if (i < 32) {
-                f = (d & b) | ((~d) & c);
-                g = (uint)(5 * i + 1) % 16;
-            } else if (i < 48) {
-                f = b ^ c ^ d;
-                g = (uint)(3 * i + 5) % 16;
-            } else {
-                f = c ^ (b | (~d));
-                g = (uint)(7 * i) % 16;
-            }
-
-            tmp = d;
-            d = c;
-            c = b;
-            x = a + f + kk[i] + w[g];
-            c2 = (int)r[i];
-            b = b + (((x) << (c2)) | ((x) >> (32 - (c2))));
-            a = tmp;
-        }
-
-        h0 += a;
-        h1 += b;
-        h2 += c;
-        h3 += d;
-
-        if (h0 == targets[0] && h1 == targets[1] &&
-               h2 == targets[2] && h3 == targets[3]) {
-            output[0] = 1;
-            output[1] = h0;
-            output[2] = h1;
-            output[3] = h2;
-            output[4] = h3;
-            output[5] = w[0];
-            output[6] = w[1];
-            return;
+    for (int i = 0; i < 64; i++) {
+        uint f, g;
+        if (i < 16) {
+            f = (b & c) | ((~b) & d);
+            g = (uint)i;
+        } else if (i < 32) {
+            f = (d & b) | ((~d) & c);
+            g = (uint)(5 * i + 1) % 16;
+        } else if (i < 48) {
+            f = b ^ c ^ d;
+            g = (uint)(3 * i + 5) % 16;
         } else {
-            for (int i = 0; i < 8; i++) {
-                input[i] = (input[i] + 1) % 127;
-                if (input[i] == 0) {
-                    input[i] = 32;
-                } else {
-                    break;
-                }
-            }
+            f = c ^ (b | (~d));
+            g = (uint)(7 * i) % 16;
         }
+
+        uint tmp = d;
+        d = c;
+        c = b;
+        uint x = a + f + k[i] + w[g];
+        b = b + ((x << r[i]) | (x >> (32 - r[i])));
+        a = tmp;
     }
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    result->h[0] = h0 + a;
+    result->h[1] = h1 + b;
+    result->h[2] = h2 + c;
+    result->h[3] = h3 + d;
 }
 

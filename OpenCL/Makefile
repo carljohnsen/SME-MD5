@@ -50,7 +50,7 @@ endif
 endif
 
 $(PROJ): $(PROJ).c $(PROJ).h
-	$(CC) $(CFLAGS) -o $@ $^ $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $^ $(INC_DIRS:%=-I%) $(LIB_DIRS:%=-L%) $(LIBS) -I ./
 
 .PHONY: clean
 

@@ -2,8 +2,13 @@
 #define SOLVER
 
 #define GLOBAL_KERNELS 64
-#define GENERATOR_TOP_FOUR 0xFFFFFFFF00000000
-#define GENERATOR_STEP_SIZE GENERATOR_TOP_FOUR / GLOBAL_KERNELS
-#define KERNEL_ITERATIONS 100000
+
+typedef struct {
+    char data[64];
+} block;
+
+typedef struct {
+    unsigned int h[4];
+} hashes;
 
 #endif
