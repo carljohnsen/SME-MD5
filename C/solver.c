@@ -5,7 +5,7 @@
 #include <openssl/md5.h>
 
 typedef struct {
-    char data[512];
+    char data[64];
 } block;
 
 typedef struct {
