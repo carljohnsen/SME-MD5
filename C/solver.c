@@ -15,17 +15,8 @@ typedef struct {
 hashes core(block input);
 void tester(int rounds);
 
-
 int main(int argc, char **argv) {
-    struct timeval start, end;
-    unsigned long guesses = 0;
-    int c;
-    gettimeofday(&start, NULL);
-    tester(1000000);
-    gettimeofday(&end, NULL);
-    unsigned long sec = end.tv_sec - start.tv_sec;
-    unsigned long msec = (end.tv_usec - start.tv_usec) / 1000;
-    unsigned long total_msec = sec * 1000 + msec;
+    tester(10000000);
 }
 
 hashes core(block input) {
@@ -97,6 +88,7 @@ hashes core(block input) {
 }
 
 void tester(int rounds) {
+    unsigned long total_usec = 0;
     srand(time(NULL));
     for (int i = 0; i < rounds; i++) {
         // Generate the data
@@ -116,7 +108,15 @@ void tester(int rounds) {
             ((int *)blk.data)[j] = tmp[j];
 
         // Compute the resulting hash
+        struct timeval start, end;
+        unsigned long guesses = 0;
+        int c;
+        gettimeofday(&start, NULL);
         hashes computed = core(blk);
+        gettimeofday(&end, NULL);
+        unsigned long usec = end.tv_usec - start.tv_usec;
+        total_usec += usec;
+
 
         // Compute the library hash for verification
         unsigned char digest[16];
@@ -139,5 +139,9 @@ void tester(int rounds) {
             printf(" - computed\n");
         }
     }
-    printf("Test done\n");
+    unsigned long usec =  total_usec % 1000;
+    unsigned long msec = (total_usec / 1000) % 1000;
+    unsigned long  sec = (total_usec / 1000) / 1000;
+    printf("Test done. Core finished in %lu.%03lu%03lu seconds\n", sec, msec, usec);
+    printf("That is %lu usec per round", total_usec / rounds);
 }
