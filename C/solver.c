@@ -4,8 +4,15 @@
 #include <sys/time.h>
 #include <openssl/md5.h>
 
+#define BLOCK_SIZE_BITS 512
+#define BLOCK_SIZE BLOCK_SIZE_BITS / 8
+#define KB 1024
+#define MB KB * 1024
+#define GB MB * 1024
+#define NUM_BLOCKS (1 * GB) / BLOCK_SIZE
+
 typedef struct {
-    char data[64];
+    char data[BLOCK_SIZE];
 } block;
 
 typedef struct {
@@ -13,10 +20,10 @@ typedef struct {
 } hashes;
 
 hashes core(block input);
-void tester(int rounds);
+void tester();
 
 int main(int argc, char **argv) {
-    tester(10000000);
+    tester();
 }
 
 hashes core(block input) {
@@ -87,45 +94,55 @@ hashes core(block input) {
     return result;
 }
 
-void tester(int rounds) {
+void tester() {
     unsigned long total_usec = 0;
     srand(time(NULL));
-    for (int i = 0; i < rounds; i++) {
+
+    // Allocate the blocks and the results
+    block blocks[NUM_BLOCKS];
+    hashes results[NUM_BLOCKS];
+    int sizes[NUM_BLOCKS];
+    for (int i = 0; i < NUM_BLOCKS; i++) {
         // Generate the data
-        int words = rand() % 13;
+        sizes[i] = rand() % 13;
         int tmp[16];
-        for (int j = 0; j < words; j++)
+        for (int j = 0; j < sizes[i]; j++)
             tmp[j] = rand();
-        tmp[words] = 128;
-        for (int j = words+1; j < 15; j++)
+        tmp[sizes[i]] = 128;
+        for (int j = sizes[i]+1; j < 15; j++)
             tmp[j] = 0;
-        tmp[14] = words * 4 * 8;
+        tmp[14] = sizes[i] * 4 * 8;
         tmp[15] = 0;
         
         // Fill the block
-        block blk;
         for (int j = 0; j < 16; j++)
-            ((int *)blk.data)[j] = tmp[j];
+            ((int *)blocks[i].data)[j] = tmp[j];
+    }
 
+    // Set up timing
+    struct timeval start, end;
+    unsigned long guesses = 0;
+    gettimeofday(&start, NULL);
+
+    for (int i = 0; i < NUM_BLOCKS; i++) {
         // Compute the resulting hash
-        struct timeval start, end;
-        unsigned long guesses = 0;
-        int c;
-        gettimeofday(&start, NULL);
-        hashes computed = core(blk);
-        gettimeofday(&end, NULL);
-        unsigned long usec = end.tv_usec - start.tv_usec;
-        total_usec += usec;
+        results[i] = core(blocks[i]);
+    }
 
+    // Stop timing
+    gettimeofday(&end, NULL);
+    unsigned long usec = end.tv_usec - start.tv_usec;
+    total_usec += usec;
 
+    for (int i = 0; i < NUM_BLOCKS; i++) {
         // Compute the library hash for verification
         unsigned char digest[16];
-        MD5((unsigned char *)&blk.data, words*4, digest);
+        MD5((unsigned char *)blocks[i].data, sizes[i] * 4, digest);
 
         // Compare the outputs
         int eq = 1;
         for (int j = 0; j < 16; j++)
-            eq = eq && digest[j] == ((unsigned char *)computed.h)[j];
+            eq = eq && digest[j] == ((unsigned char *)results[i].h)[j];
 
         // Report error, if any
         if (!eq) {
@@ -135,13 +152,13 @@ void tester(int rounds) {
                 printf("%08X ", ((int*)digest)[j]);
             printf(" - verified\n");
             for (int j = 0; j < 4; j++)
-                printf("%08X ", computed.h[j]);
+                printf("%08X ", results[i].h[j]);
             printf(" - computed\n");
         }
     }
-    unsigned long usec =  total_usec % 1000;
+                  usec =  total_usec % 1000;
     unsigned long msec = (total_usec / 1000) % 1000;
     unsigned long  sec = (total_usec / 1000) / 1000;
     printf("Test done. Core finished in %lu.%03lu%03lu seconds\n", sec, msec, usec);
-    printf("That is %lu usec per round", total_usec / rounds);
+    printf("That is %lu usec per block", total_usec / NUM_BLOCKS);
 }
